@@ -1,9 +1,9 @@
 const documentService = require('../services/document.service');
 
-function upload(req, res, next) {
+async function upload(req, res, next) {
   try {
     const owner = getOwner(req);
-    const document = documentService.createDocument(req.file, owner);
+    const document = await documentService.createDocument(req.file, owner);
     res.status(201).json({ document: toPublicDocument(document) });
   } catch (error) {
     next(error);
@@ -28,10 +28,10 @@ function list(req, res, next) {
   }
 }
 
-function download(req, res, next) {
+async function download(req, res, next) {
   try {
     const owner = getOwner(req);
-    const { document, filePath } = documentService.prepareDownload(
+    const { document, filePath } = await documentService.prepareDownload(
       req.params.id,
       owner,
     );
@@ -49,7 +49,7 @@ function download(req, res, next) {
 function getOwner(req) {
   const owner = req.get('X-User-Id')?.trim();
 
-  if (!owner) {
+  if (!owner || owner.length > 128 || /[\r\n]/.test(owner)) {
     const error = new documentService.DocumentError(
       'VALIDATION_ERROR',
       'O header X-User-Id é obrigatório.',

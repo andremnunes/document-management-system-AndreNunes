@@ -1,12 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-
-const defaultStorageDirectory = path.resolve(__dirname, '../../storage');
-const storageDirectory = process.env.STORAGE_DIR
-  ? path.resolve(process.cwd(), process.env.STORAGE_DIR)
-  : defaultStorageDirectory;
-
-fs.mkdirSync(storageDirectory, { recursive: true });
+const { storageDirectory } = require('../config/storage');
 
 const documents = new Map();
 
@@ -34,14 +28,29 @@ function findByIdAndOwner(id, owner) {
 }
 
 function getFilePath(document) {
-  return path.join(storageDirectory, document.storageName);
+  if (
+    typeof document.storageName !== 'string'
+    || !document.storageName
+    || path.basename(document.storageName) !== document.storageName
+  ) {
+    throw new Error('O nome físico do documento é inválido.');
+  }
+
+  const filePath = path.resolve(storageDirectory, document.storageName);
+  const relativePath = path.relative(storageDirectory, filePath);
+
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error('O caminho do documento está fora do storage.');
+  }
+
+  return filePath;
 }
 
-function removeFile(document) {
+async function removeFile(document) {
   const filePath = getFilePath(document);
 
   try {
-    fs.unlinkSync(filePath);
+    await fs.promises.unlink(filePath);
   } catch (error) {
     if (error.code !== 'ENOENT') {
       throw error;

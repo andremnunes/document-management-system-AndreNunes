@@ -43,6 +43,12 @@ button:disabled {
   opacity: 0.6;
 }
 
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #e36f3d;
+  outline-offset: 2px;
+}
+
 .app-shell {
   min-height: 100vh;
   background: linear-gradient(135deg, #e9eee8 0%, #f6f1e8 55%, #d8e4db 100%);

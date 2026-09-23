@@ -17,7 +17,7 @@ export default function DocumentList({ owner, refreshToken }) {
       try {
         const result = await listDocuments(owner);
         if (isCurrentRequest) {
-          setDocuments(result.documents);
+          setDocuments(Array.isArray(result.documents) ? result.documents : []);
           setStatus('success');
         }
       } catch (error) {
@@ -63,7 +63,7 @@ export default function DocumentList({ owner, refreshToken }) {
 }
 
 function formatDetails(document) {
-  const sizeInKb = Math.max(1, Math.round(document.size / 1024));
+  const sizeInKb = Math.max(1, Math.round(Number(document.size || 0) / 1024));
   const uploadDate = new Date(document.uploadedAt).toLocaleString('pt-BR');
   return `${sizeInKb} KB · enviado em ${uploadDate}`;
 }

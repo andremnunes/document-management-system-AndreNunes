@@ -1,4 +1,5 @@
 const API_PREFIX = '/api';
+const REQUEST_TIMEOUT_MS = 10000;
 
 class ApiError extends Error {
   constructor(message, status, code) {
@@ -10,22 +11,47 @@ class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_PREFIX}${path}`, options);
-  const contentType = response.headers.get('content-type') || '';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  if (!response.ok) {
-    const errorBody = contentType.includes('application/json')
-      ? await response.json()
-      : null;
-    const error = errorBody?.error;
-    throw new ApiError(
-      error?.message || 'Não foi possível concluir a operação.',
-      response.status,
-      error?.code,
-    );
+  try {
+    const response = await fetch(`${API_PREFIX}${path}`, {
+      ...options,
+      signal: options.signal || controller.signal,
+    });
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!response.ok) {
+      let errorBody = null;
+      if (contentType.includes('application/json')) {
+        try {
+          errorBody = await response.json();
+        } catch {
+          errorBody = null;
+        }
+      }
+      const error = errorBody?.error;
+      throw new ApiError(
+        error?.message || 'Não foi possível concluir a operação.',
+        response.status,
+        error?.code,
+      );
+    }
+
+    return response;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new ApiError('A operação excedeu o tempo limite.', 408, 'TIMEOUT');
+    }
+
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    throw new ApiError('Não foi possível conectar ao servidor.', 0, 'NETWORK_ERROR');
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response;
 }
 
 export async function uploadDocument(file, owner) {
@@ -70,7 +96,11 @@ function getFileName(contentDisposition) {
 
   const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
   if (utf8Match) {
-    return decodeURIComponent(utf8Match[1]);
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return null;
+    }
   }
 
   const basicMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
