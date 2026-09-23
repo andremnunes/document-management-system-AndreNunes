@@ -11,7 +11,7 @@ class DocumentError extends Error {
   }
 }
 
-function createDocument(file, owner) {
+async function createDocument(file, owner) {
   if (!file) {
     throw new DocumentError(
       'VALIDATION_ERROR',
@@ -32,7 +32,11 @@ function createDocument(file, owner) {
   try {
     return documentRepository.saveMetadata(document);
   } catch (error) {
-    documentRepository.removeFile(document);
+    try {
+      await documentRepository.removeFile(document);
+    } catch {
+      // A falha na limpeza não deve substituir o erro de persistência original.
+    }
     throw new DocumentError(
       'STORAGE_ERROR',
       'Não foi possível registrar o documento.',
@@ -46,7 +50,7 @@ function listDocuments(owner) {
   return documentRepository.listByOwner(owner).map(toPublicDocument);
 }
 
-function prepareDownload(id, owner) {
+async function prepareDownload(id, owner) {
   const document = documentRepository.findByIdAndOwner(id, owner);
 
   if (!document) {
@@ -57,9 +61,20 @@ function prepareDownload(id, owner) {
     );
   }
 
-  const filePath = documentRepository.getFilePath(document);
+  let filePath;
+  try {
+    filePath = documentRepository.getFilePath(document);
+  } catch {
+    throw new DocumentError(
+      'STORAGE_ERROR',
+      'O caminho físico do documento é inválido.',
+      500,
+    );
+  }
 
-  if (!fs.existsSync(filePath)) {
+  try {
+    await fs.promises.access(filePath, fs.constants.R_OK);
+  } catch {
     throw new DocumentError(
       'DOCUMENT_NOT_FOUND',
       'Documento não encontrado.',

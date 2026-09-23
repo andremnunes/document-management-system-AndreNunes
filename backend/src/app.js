@@ -17,13 +17,28 @@ const documentRoutes = require('./routes/document.routes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
 app.use(documentRoutes);
 
-// Endpoint de verificação de saúde. As demais rotas (/upload, /documents,
-// /documents/:id/download) serão implementadas durante o Passo 2.
+// Endpoint de verificação de saúde.
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+app.use((req, res) => {
+  res.status(404).json({
+    error: {
+      code: 'NOT_FOUND',
+      message: 'Rota não encontrada.',
+    },
+  });
 });
 
 app.use((error, req, res, next) => {
@@ -50,6 +65,10 @@ app.use((error, req, res, next) => {
   const message = error.statusCode
     ? error.message
     : 'Ocorreu um erro interno.';
+
+  if (statusCode >= 500) {
+    console.error(error);
+  }
 
   return res.status(statusCode).json({
     error: {
